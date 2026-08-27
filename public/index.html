@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Safety Sight | ระบบกล้องวงจรปิดเพื่อความปลอดภัย</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            night: "#070b14",
+            panel: "#10182a",
+            line: "#243049",
+            accent: "#22d3ee",
+            warn: "#f59e0b",
+            danger: "#f43f5e"
+          },
+          fontFamily: {
+            sans: ["Sarabun", "Noto Sans Thai", "ui-sans-serif", "system-ui"]
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { background: radial-gradient(1200px 600px at 10% -10%, #123 0%, #070b14 45%); }
+    .scanline::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.18) 2px 4px);
+      pointer-events: none;
+    }
+    .bbox { animation: pulseBox 1.8s ease-in-out infinite; }
+    @keyframes pulseBox {
+      0%, 100% { opacity: .9; }
+      50% { opacity: .45; }
+    }
+    .toast-in { animation: toastIn .25s ease-out; }
+    @keyframes toastIn {
+      from { transform: translateY(12px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body class="font-sans text-slate-100 min-h-screen">
+  <div id="app" class="min-h-screen flex flex-col">
+    <header class="border-b border-line bg-night/80 backdrop-blur sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 grid place-items-center font-bold text-accent">AI</div>
+          <div>
+            <h1 class="text-lg font-bold tracking-wide">AI Safety Sight</h1>
+            <p class="text-xs text-slate-400">ระบบเฝ้าระวังความปลอดภัยด้วยกล้องวงจรปิดและ AI</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 text-sm">
+            <span id="sysDot" class="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]"></span>
+            <span id="sysStatus">ระบบพร้อมใช้งาน</span>
+          </div>
+          <div id="guestActions" class="flex gap-2">
+            <button type="button" id="openLogin" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-900 font-semibold text-sm">เข้าสู่ระบบ</button>
+            <button type="button" id="openRegister" class="px-3 py-1.5 rounded-lg border border-line text-sm">สมัครสมาชิก</button>
+          </div>
+          <div id="userActions" class="hidden items-center gap-3">
+            <div class="text-right">
+              <p id="userName" class="text-sm font-semibold"></p>
+              <p id="userRole" class="text-xs text-slate-400"></p>
+            </div>
+            <button type="button" id="logoutBtn" class="px-3 py-1.5 rounded-lg border border-rose-500/50 text-rose-300 text-sm">ออกจากระบบ</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6 space-y-6">
+      <section id="guestHero" class="rounded-2xl border border-line bg-panel p-8 text-center">
+        <h2 class="text-2xl font-bold mb-2">เฝ้าระวังไซต์งานแบบเรียลไทม์</h2>
+        <p class="text-slate-400 mb-6">ตรวจจับหมวกนิรภัย การล้ม และบุกรุกพื้นที่หวงห้าม จากกล้องวงจรปิดทุกจุด</p>
+        <p class="text-sm text-slate-500">บัญชีทดสอบ: <code>admin</code> / <code>Admin123!</code></p>
+      </section>
+
+      <div id="dashboard" class="hidden space-y-6">
+        <section>
+          <div class="flex items-end justify-between mb-3">
+            <div>
+              <h2 class="text-xl font-bold">แดชบอร์ดกล้องวงจรปิดสด</h2>
+              <p class="text-sm text-slate-400">กรอบสี่เหลี่ยมจำลองผลตรวจจับของ AI</p>
+            </div>
+            <p class="text-xs text-slate-500" id="clock"></p>
+          </div>
+          <div id="cameraGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        </section>
+
+        <section class="rounded-2xl border border-line bg-panel overflow-hidden">
+          <div class="px-4 py-3 border-b border-line flex items-center justify-between">
+            <h2 class="font-bold">บันทึกเหตุละเมิดความปลอดภัย</h2>
+            <button type="button" id="refreshAlerts" class="text-sm text-accent">รีเฟรช</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-900/50 text-slate-400">
+                <tr>
+                  <th class="text-left px-4 py-2">เวลา</th>
+                  <th class="text-left px-4 py-2">กล้อง</th>
+                  <th class="text-left px-4 py-2">ประเภท</th>
+                  <th class="text-left px-4 py-2">ระดับ</th>
+                  <th class="text-left px-4 py-2">รายละเอียด</th>
+                  <th class="text-left px-4 py-2">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="alertBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="userSection" class="hidden rounded-2xl border border-line bg-panel overflow-hidden">
+          <div class="px-4 py-3 border-b border-line flex flex-wrap gap-3 items-center justify-between">
+            <h2 class="font-bold">จัดการผู้ใช้</h2>
+            <div class="flex gap-2">
+              <input id="userSearch" class="bg-night border border-line rounded-lg px-3 py-1.5 text-sm" placeholder="ค้นหาผู้ใช้" />
+              <button type="button" id="addUserBtn" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-900 text-sm font-semibold">เพิ่มผู้ใช้</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-900/50 text-slate-400">
+                <tr>
+                  <th class="text-left px-4 py-2">ID</th>
+                  <th class="text-left px-4 py-2">ชื่อผู้ใช้</th>
+                  <th class="text-left px-4 py-2">ชื่อ-นามสกุล</th>
+                  <th class="text-left px-4 py-2">อีเมล</th>
+                  <th class="text-left px-4 py-2">บทบาท</th>
+                  <th class="text-left px-4 py-2">สถานะ</th>
+                  <th class="text-left px-4 py-2">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="userBody"></tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 flex items-center justify-between text-sm text-slate-400">
+            <span id="userPageInfo"></span>
+            <div class="flex gap-2">
+              <button type="button" id="prevUsers" class="px-3 py-1 rounded border border-line">ก่อนหน้า</button>
+              <button type="button" id="nextUsers" class="px-3 py-1 rounded border border-line">ถัดไป</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-line bg-panel p-4">
+          <h2 class="font-bold mb-3">เปลี่ยนรหัสผ่าน</h2>
+          <form id="changePasswordForm" class="grid md:grid-cols-3 gap-3">
+            <input type="password" name="current_password" required minlength="8" class="bg-night border border-line rounded-lg px-3 py-2" placeholder="รหัสผ่านปัจจุบัน" />
+            <input type="password" name="new_password" required minlength="8" class="bg-night border border-line rounded-lg px-3 py-2" placeholder="รหัสผ่านใหม่" />
+            <button class="px-3 py-2 rounded-lg bg-slate-700 font-semibold">บันทึก</button>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="modalRoot" class="hidden fixed inset-0 z-40 bg-black/70 grid place-items-center p-4">
+    <div class="w-full max-w-md rounded-2xl border border-line bg-panel p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="modalTitle" class="text-lg font-bold">เข้าสู่ระบบ</h3>
+        <button type="button" id="closeModal" class="text-slate-400">ปิด</button>
+      </div>
+      <form id="authForm" class="space-y-3">
+        <input id="authUsername" name="username" required class="w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="ชื่อผู้ใช้" />
+        <p id="usernameHint" class="hidden text-xs"></p>
+        <input id="authEmail" name="email" type="email" class="hidden w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="อีเมล" />
+        <input id="authFullName" name="full_name" class="hidden w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="ชื่อ-นามสกุล" />
+        <input id="authPassword" name="password" type="password" required minlength="8" class="w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="รหัสผ่าน" />
+        <button id="authSubmit" class="w-full py-2 rounded-lg bg-cyan-500 text-slate-900 font-bold">เข้าสู่ระบบ</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="userModal" class="hidden fixed inset-0 z-40 bg-black/70 grid place-items-center p-4">
+    <div class="w-full max-w-md rounded-2xl border border-line bg-panel p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="userModalTitle" class="text-lg font-bold">เพิ่มผู้ใช้</h3>
+        <button type="button" id="closeUserModal" class="text-slate-400">ปิด</button>
+      </div>
+      <form id="userForm" class="space-y-3">
+        <input type="hidden" name="id" />
+        <input name="username" required class="w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="ชื่อผู้ใช้" />
+        <input name="email" type="email" required class="w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="อีเมล" />
+        <input name="full_name" required class="w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="ชื่อ-นามสกุล" />
+        <input name="password" minlength="8" class="w-full bg-night border border-line rounded-lg px-3 py-2" placeholder="รหัสผ่าน (เมื่อสร้างใหม่)" />
+        <select name="role" class="w-full bg-night border border-line rounded-lg px-3 py-2">
+          <option value="operator">เจ้าหน้าที่</option>
+          <option value="supervisor">หัวหน้างาน</option>
+          <option value="admin">ผู้ดูแลระบบ</option>
+        </select>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="is_active" checked /> เปิดใช้งานบัญชี
+        </label>
+        <button class="w-full py-2 rounded-lg bg-cyan-500 text-slate-900 font-bold">บันทึก</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toasts" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+  <script>
+    const state = {
+      token: localStorage.getItem("ass_token") || "",
+      user: null,
+      authMode: "login",
+      cameras: [],
+      alerts: [],
+      users: [],
+      userPage: 1,
+      userLimit: 5,
+      userTotalPages: 1,
+      userQuery: "",
+      pollTimer: null
+    };
+
+    const ROLE_TH = { admin: "ผู้ดูแลระบบ", supervisor: "หัวหน้างาน", operator: "เจ้าหน้าที่" };
+    const TYPE_TH = { helmet: "ไม่สวมหมวกนิรภัย", fall: "ตรวจพบการล้ม", restricted: "บุกรุกพื้นที่หวงห้าม" };
+    const SEV_TH = { low: "ต่ำ", medium: "ปานกลาง", high: "สูง", critical: "วิกฤต" };
+    const STATUS_TH = { open: "เปิด", acknowledged: "รับทราบ", resolved: "ปิดงาน" };
+
+    function toast(message, type) {
+      const el = document.createElement("div");
+      el.className = "toast-in rounded-lg px-4 py-2 text-sm shadow-lg " + (type === "error" ? "bg-rose-600" : "bg-emerald-600");
+      el.textContent = message;
+      document.getElementById("toasts").appendChild(el);
+      setTimeout(() => el.remove(), 3200);
+    }
+
+    async function api(path, options) {
+      const opts = options || {};
+      const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+      if (state.token) headers.Authorization = "Bearer " + state.token;
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      let data = {};
+      try { data = await res.json(); } catch (_e) { data = {}; }
+      if (!res.ok) {
+        const err = new Error(data.message || "คำขอล้มเหลว");
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    }
+
+    function setAuthUi() {
+      const loggedIn = Boolean(state.user);
+      document.getElementById("guestActions").classList.toggle("hidden", loggedIn);
+      document.getElementById("guestHero").classList.toggle("hidden", loggedIn);
+      document.getElementById("userActions").classList.toggle("hidden", !loggedIn);
+      document.getElementById("userActions").classList.toggle("flex", loggedIn);
+      document.getElementById("dashboard").classList.toggle("hidden", !loggedIn);
+      if (state.user) {
+        document.getElementById("userName").textContent = state.user.full_name + " (@" + state.user.username + ")";
+        document.getElementById("userRole").textContent = ROLE_TH[state.user.role] || state.user.role;
+        document.getElementById("userSection").classList.toggle("hidden", !["admin", "supervisor"].includes(state.user.role));
+      }
+    }
+
+    function openAuth(mode) {
+      state.authMode = mode;
+      document.getElementById("modalRoot").classList.remove("hidden");
+      document.getElementById("modalTitle").textContent = mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก";
+      document.getElementById("authSubmit").textContent = mode === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชี";
+      document.getElementById("authEmail").classList.toggle("hidden", mode === "login");
+      document.getElementById("authFullName").classList.toggle("hidden", mode === "login");
+      document.getElementById("usernameHint").classList.toggle("hidden", mode === "login");
+      document.getElementById("authEmail").required = mode === "register";
+      document.getElementById("authFullName").required = mode === "register";
+    }
+
+    function closeAuth() {
+      document.getElementById("modalRoot").classList.add("hidden");
+    }
+
+    function bboxMarkup(cam) {
+      const boxes = [];
+      if (cam.ai_models.includes("helmet")) {
+        boxes.push('<div class="bbox absolute border-2 border-amber-400 text-[10px] text-amber-200 px-1" style="left:12%;top:28%;width:22%;height:38%;">หมวกนิรภัย</div>');
+      }
+      if (cam.ai_models.includes("fall")) {
+        boxes.push('<div class="bbox absolute border-2 border-rose-400 text-[10px] text-rose-200 px-1" style="left:48%;top:52%;width:30%;height:22%;">การล้ม</div>');
+      }
+      if (cam.ai_models.includes("restricted")) {
+        boxes.push('<div class="bbox absolute border-2 border-cyan-300 text-[10px] text-cyan-100 px-1" style="left:62%;top:18%;width:28%;height:34%;">พื้นที่หวงห้าม</div>');
+      }
+      return boxes.join("");
+    }
+
+    function renderCameras() {
+      const grid = document.getElementById("cameraGrid");
+      grid.innerHTML = state.cameras.map(function (cam) {
+        const online = cam.status === "online";
+        return (
+          '<article class="rounded-xl border border-line bg-night overflow-hidden">' +
+            '<div class="relative aspect-video scanline bg-gradient-to-br from-slate-800 via-slate-900 to-black">' +
+              '<div class="absolute inset-0 opacity-40" style="background-image:radial-gradient(circle at 30% 40%, #334 2px, transparent 3px),radial-gradient(circle at 70% 70%, #223 1px, transparent 2px);background-size:40px 40px;"></div>' +
+              bboxMarkup(cam) +
+              '<div class="absolute top-2 left-2 text-[11px] bg-black/60 px-2 py-0.5 rounded">' + cam.id.toUpperCase() + " • LIVE</div>" +
+              '<div class="absolute top-2 right-2 text-[11px] px-2 py-0.5 rounded ' + (online ? "bg-emerald-600/80" : "bg-amber-600/80") + '">' + (online ? "ออนไลน์" : "สัญญาณอ่อน") + "</div>" +
+            "</div>" +
+            '<div class="p-3">' +
+              '<h3 class="font-semibold">' + cam.name + "</h3>" +
+              '<p class="text-xs text-slate-400">' + cam.location + " • โซน " + cam.zone + "</p>" +
+            "</div>" +
+          "</article>"
+        );
+      }).join("");
+    }
+
+    function renderAlerts() {
+      const body = document.getElementById("alertBody");
+      if (!state.alerts.length) {
+        body.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">ยังไม่มีเหตุแจ้งเตือน</td></tr>';
+        return;
+      }
+      body.innerHTML = state.alerts.map(function (a) {
+        const sevClass = a.severity === "critical" || a.severity === "high" ? "text-rose-300" : "text-amber-300";
+        return (
+          "<tr class='border-t border-line'>" +
+            "<td class='px-4 py-2 whitespace-nowrap'>" + a.created_at.replace("T", " ").slice(0, 19) + "</td>" +
+            "<td class='px-4 py-2'>" + a.camera_name + "</td>" +
+            "<td class='px-4 py-2'>" + (TYPE_TH[a.alert_type] || a.alert_type) + "</td>" +
+            "<td class='px-4 py-2 " + sevClass + "'>" + (SEV_TH[a.severity] || a.severity) + "</td>" +
+            "<td class='px-4 py-2'>" + a.description + "</td>" +
+            "<td class='px-4 py-2'>" + (STATUS_TH[a.status] || a.status) + "</td>" +
+          "</tr>"
+        );
+      }).join("");
+    }
+
+    function renderUsers() {
+      const body = document.getElementById("userBody");
+      body.innerHTML = state.users.map(function (u) {
+        return (
+          "<tr class='border-t border-line'>" +
+            "<td class='px-4 py-2'>" + u.id + "</td>" +
+            "<td class='px-4 py-2'>" + u.username + "</td>" +
+            "<td class='px-4 py-2'>" + u.full_name + "</td>" +
+            "<td class='px-4 py-2'>" + u.email + "</td>" +
+            "<td class='px-4 py-2'>" + (ROLE_TH[u.role] || u.role) + "</td>" +
+            "<td class='px-4 py-2'>" + (u.is_active ? "ใช้งาน" : "ระงับ") + "</td>" +
+            "<td class='px-4 py-2 space-x-2'>" +
+              "<button type='button' class='text-accent' data-edit='" + u.id + "'>แก้ไข</button>" +
+              (state.user && state.user.role === "admin" ? "<button type='button' class='text-rose-300' data-del='" + u.id + "'>ลบ</button>" : "") +
+            "</td>" +
+          "</tr>"
+        );
+      }).join("");
+      document.getElementById("userPageInfo").textContent = "หน้า " + state.userPage + " / " + state.userTotalPages;
+    }
+
+    async function loadDashboard() {
+      const cams = await api("/api/cameras");
+      state.cameras = cams.cameras || [];
+      renderCameras();
+      await loadAlerts();
+      if (state.user && ["admin", "supervisor"].includes(state.user.role)) {
+        await loadUsers();
+      }
+    }
+
+    async function loadAlerts() {
+      const data = await api("/api/alerts?limit=20");
+      state.alerts = data.alerts || [];
+      renderAlerts();
+    }
+
+    async function loadUsers() {
+      const q = encodeURIComponent(state.userQuery || "");
+      const data = await api("/api/users?page=" + state.userPage + "&limit=" + state.userLimit + "&q=" + q);
+      state.users = data.users || [];
+      state.userTotalPages = data.total_pages || 1;
+      renderUsers();
+    }
+
+    async function restoreSession() {
+      if (!state.token) {
+        setAuthUi();
+        return;
+      }
+      try {
+        const data = await api("/api/me");
+        state.user = data.user;
+        setAuthUi();
+        await loadDashboard();
+        startPolling();
+      } catch (_err) {
+        state.token = "";
+        localStorage.removeItem("ass_token");
+        setAuthUi();
+      }
+    }
+
+    function startPolling() {
+      if (state.pollTimer) clearInterval(state.pollTimer);
+      state.pollTimer = setInterval(function () {
+        if (state.user) loadAlerts().catch(function () {});
+      }, 8000);
+    }
+
+    document.getElementById("openLogin").addEventListener("click", function () { openAuth("login"); });
+    document.getElementById("openRegister").addEventListener("click", function () { openAuth("register"); });
+    document.getElementById("closeModal").addEventListener("click", closeAuth);
+
+    document.getElementById("authUsername").addEventListener("blur", async function () {
+      if (state.authMode !== "register") return;
+      const name = this.value.trim();
+      if (!name) return;
+      try {
+        const data = await api("/api/check-username/" + encodeURIComponent(name));
+        const hint = document.getElementById("usernameHint");
+        hint.classList.remove("hidden");
+        hint.textContent = data.message;
+        hint.className = "text-xs " + (data.available ? "text-emerald-400" : "text-rose-300");
+      } catch (_e) {}
+    });
+
+    document.getElementById("authForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      try {
+        const path = state.authMode === "login" ? "/api/login" : "/api/register";
+        const data = await api(path, { method: "POST", body: JSON.stringify(payload) });
+        state.token = data.token;
+        state.user = data.user;
+        localStorage.setItem("ass_token", data.token);
+        closeAuth();
+        toast(data.message);
+        setAuthUi();
+        await loadDashboard();
+        startPolling();
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async function () {
+      try { await api("/api/logout", { method: "POST" }); } catch (_e) {}
+      state.token = "";
+      state.user = null;
+      localStorage.removeItem("ass_token");
+      if (state.pollTimer) clearInterval(state.pollTimer);
+      setAuthUi();
+      toast("ออกจากระบบแล้ว");
+    });
+
+    document.getElementById("refreshAlerts").addEventListener("click", function () {
+      loadAlerts().then(function () { toast("อัปเดตเหตุแจ้งเตือนแล้ว"); }).catch(function (err) { toast(err.message, "error"); });
+    });
+
+    document.getElementById("changePasswordForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const data = await api("/api/change-password", { method: "POST", body: JSON.stringify(Object.fromEntries(fd.entries())) });
+        toast(data.message);
+        e.target.reset();
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    });
+
+    document.getElementById("prevUsers").addEventListener("click", function () {
+      if (state.userPage > 1) {
+        state.userPage -= 1;
+        loadUsers().catch(function (err) { toast(err.message, "error"); });
+      }
+    });
+    document.getElementById("nextUsers").addEventListener("click", function () {
+      if (state.userPage < state.userTotalPages) {
+        state.userPage += 1;
+        loadUsers().catch(function (err) { toast(err.message, "error"); });
+      }
+    });
+    document.getElementById("userSearch").addEventListener("input", function (e) {
+      state.userQuery = e.target.value;
+      state.userPage = 1;
+      loadUsers().catch(function () {});
+    });
+
+    function openUserModal(user) {
+      const form = document.getElementById("userForm");
+      form.reset();
+      document.getElementById("userModalTitle").textContent = user ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้";
+      form.elements.password.required = !user;
+      if (user) {
+        form.elements.id.value = user.id;
+        form.elements.username.value = user.username;
+        form.elements.email.value = user.email;
+        form.elements.full_name.value = user.full_name;
+        form.elements.role.value = user.role;
+        form.elements.is_active.checked = Boolean(user.is_active);
+      }
+      document.getElementById("userModal").classList.remove("hidden");
+    }
+
+    document.getElementById("addUserBtn").addEventListener("click", function () { openUserModal(null); });
+    document.getElementById("closeUserModal").addEventListener("click", function () {
+      document.getElementById("userModal").classList.add("hidden");
+    });
+
+    document.getElementById("userBody").addEventListener("click", async function (e) {
+      const editId = e.target.getAttribute("data-edit");
+      const delId = e.target.getAttribute("data-del");
+      if (editId) {
+        try {
+          const data = await api("/api/users/" + editId);
+          openUserModal(data.user);
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      }
+      if (delId) {
+        if (!confirm("ยืนยันการลบผู้ใช้นี้?")) return;
+        try {
+          const data = await api("/api/users/" + delId, { method: "DELETE" });
+          toast(data.message);
+          await loadUsers();
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      }
+    });
+
+    document.getElementById("userForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      payload.is_active = e.target.elements.is_active.checked;
+      const id = payload.id;
+      delete payload.id;
+      try {
+        if (id) {
+          delete payload.password;
+          const data = await api("/api/users/" + id, { method: "PUT", body: JSON.stringify(payload) });
+          toast(data.message);
+        } else {
+          const data = await api("/api/register", { method: "POST", body: JSON.stringify(payload) });
+          toast("สร้างผู้ใช้แล้ว: " + data.user.username);
+        }
+        document.getElementById("userModal").classList.add("hidden");
+        await loadUsers();
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    });
+
+    async function pingHealth() {
+      try {
+        await fetch("/api/health");
+        document.getElementById("sysDot").className = "h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]";
+        document.getElementById("sysStatus").textContent = "ระบบพร้อมใช้งาน";
+      } catch (_e) {
+        document.getElementById("sysDot").className = "h-2.5 w-2.5 rounded-full bg-rose-400";
+        document.getElementById("sysStatus").textContent = "เซิร์ฟเวอร์ไม่ตอบสนอง";
+      }
+    }
+
+    setInterval(function () {
+      document.getElementById("clock").textContent = new Date().toLocaleString("th-TH");
+    }, 1000);
+    setInterval(pingHealth, 15000);
+    pingHealth();
+    restoreSession();
+  </script>
+</body>
+</html>

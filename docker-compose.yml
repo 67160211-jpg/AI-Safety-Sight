@@ -1,0 +1,18 @@
+services:
+  ai-safety-sight:
+    build: .
+    container_name: ai-safety-sight
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:-ai-safety-sight-change-me-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      DB_PATH: /app/data/safety-sight.db
+    volumes:
+      - safety-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  safety-data:
