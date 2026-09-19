@@ -41,8 +41,6 @@ graph TD
 
     DB --- Volume
 
-#Technology Stack Diagram
-
 graph TD
     subgraph Presentation ["1. Presentation Layer (Frontend)"]
         UI["HTML5 / Tailwind CSS (Dark Mode UI)"]
